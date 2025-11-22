@@ -4,10 +4,13 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 const (
@@ -22,19 +25,46 @@ type Config struct {
 	Branch     string
 }
 
+var logger *slog.Logger
+
 func main() {
+	// Initialize logger with rotation
+	initLogger()
+
 	config := parseFlags()
 
 	if err := validateConfig(config); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		logger.Error("Configuration validation failed", "error", err)
 		flag.Usage()
 		os.Exit(1)
 	}
 
 	if err := run(config); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		logger.Error("Operation failed", "error", err)
 		os.Exit(1)
 	}
+}
+
+func initLogger() {
+	// Configure log rotation
+	logWriter := &lumberjack.Logger{
+		Filename:   "file-syncer.log",
+		MaxSize:    10, // megabytes
+		MaxBackups: 3,  // number of old log files to keep
+		MaxAge:     28, // days
+		Compress:   true,
+	}
+
+	// Create multi-writer for both file and stdout
+	multiWriter := io.MultiWriter(os.Stdout, logWriter)
+
+	// Create slog handler with JSON format
+	handler := slog.NewJSONHandler(multiWriter, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	})
+
+	logger = slog.New(handler)
+	slog.SetDefault(logger)
 }
 
 func parseFlags() Config {
@@ -77,10 +107,11 @@ func validateConfig(config Config) error {
 }
 
 func run(config Config) error {
-	fmt.Printf("File Syncer - Mode: %s\n", config.Mode)
-	fmt.Printf("Folder: %s\n", config.FolderPath)
-	fmt.Printf("Repository: %s\n", config.RepoURL)
-	fmt.Printf("Branch: %s\n\n", config.Branch)
+	logger.Info("File Syncer started",
+		"mode", config.Mode,
+		"folder", config.FolderPath,
+		"repository", config.RepoURL,
+		"branch", config.Branch)
 
 	if config.Mode == ModePush {
 		return pushFiles(config)
@@ -89,7 +120,7 @@ func run(config Config) error {
 }
 
 func pushFiles(config Config) error {
-	fmt.Println("Starting push operation...")
+	logger.Info("Starting push operation")
 
 	// Create absolute path for folder
 	absPath, err := filepath.Abs(config.FolderPath)
@@ -110,10 +141,10 @@ func pushFiles(config Config) error {
 	defer os.RemoveAll(tempDir)
 
 	// Clone the repository
-	fmt.Println("Cloning repository...")
+	logger.Info("Cloning repository", "url", config.RepoURL, "branch", config.Branch)
 	if err := runCommand(tempDir, "git", "clone", "--branch", config.Branch, config.RepoURL, "."); err != nil {
 		// Try cloning without branch if it doesn't exist
-		fmt.Printf("Branch '%s' not found, cloning default branch...\n", config.Branch)
+		logger.Info("Branch not found, cloning default branch", "branch", config.Branch)
 		if err := runCommand(tempDir, "git", "clone", config.RepoURL, "."); err != nil {
 			return fmt.Errorf("failed to clone repository: %w", err)
 		}
@@ -124,7 +155,7 @@ func pushFiles(config Config) error {
 	}
 
 	// Sync files from source folder to repo
-	fmt.Println("Syncing files...")
+	logger.Info("Syncing files", "source", absPath, "destination", tempDir)
 	if err := syncFiles(absPath, tempDir); err != nil {
 		return fmt.Errorf("failed to sync files: %w", err)
 	}
@@ -136,34 +167,34 @@ func pushFiles(config Config) error {
 	}
 
 	if strings.TrimSpace(output) == "" {
-		fmt.Println("No changes to push.")
+		logger.Info("No changes to push")
 		return nil
 	}
 
 	// Add all changes
-	fmt.Println("Adding changes...")
+	logger.Info("Adding changes")
 	if err := runCommand(tempDir, "git", "add", "-A"); err != nil {
 		return fmt.Errorf("failed to add changes: %w", err)
 	}
 
 	// Commit changes
-	fmt.Println("Committing changes...")
+	logger.Info("Committing changes")
 	if err := runCommand(tempDir, "git", "commit", "-m", "Sync files from local folder"); err != nil {
 		return fmt.Errorf("failed to commit changes: %w", err)
 	}
 
 	// Push to remote
-	fmt.Println("Pushing to remote...")
+	logger.Info("Pushing to remote", "branch", config.Branch)
 	if err := runCommand(tempDir, "git", "push", "origin", config.Branch); err != nil {
 		return fmt.Errorf("failed to push changes: %w", err)
 	}
 
-	fmt.Println("Push completed successfully!")
+	logger.Info("Push completed successfully")
 	return nil
 }
 
 func pullFiles(config Config) error {
-	fmt.Println("Starting pull operation...")
+	logger.Info("Starting pull operation")
 
 	// Create absolute path for folder
 	absPath, err := filepath.Abs(config.FolderPath)
@@ -184,18 +215,18 @@ func pullFiles(config Config) error {
 	defer os.RemoveAll(tempDir)
 
 	// Clone the repository
-	fmt.Println("Cloning repository...")
+	logger.Info("Cloning repository", "url", config.RepoURL, "branch", config.Branch)
 	if err := runCommand(tempDir, "git", "clone", "--branch", config.Branch, config.RepoURL, "."); err != nil {
 		return fmt.Errorf("failed to clone repository: %w", err)
 	}
 
 	// Sync files from repo to destination folder
-	fmt.Println("Syncing files...")
+	logger.Info("Syncing files", "source", tempDir, "destination", absPath)
 	if err := syncFiles(tempDir, absPath); err != nil {
 		return fmt.Errorf("failed to sync files: %w", err)
 	}
 
-	fmt.Println("Pull completed successfully!")
+	logger.Info("Pull completed successfully")
 	return nil
 }
 
@@ -262,12 +293,20 @@ func runCommand(dir string, name string, args ...string) error {
 	cmd.Dir = dir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	// Ensure environment is inherited for git credentials
+	cmd.Env = os.Environ()
+	
+	logger.Debug("Executing command", "command", name, "args", args, "dir", dir)
 	return cmd.Run()
 }
 
 func runCommandOutput(dir string, name string, args ...string) (string, error) {
 	cmd := exec.Command(name, args...)
 	cmd.Dir = dir
+	// Ensure environment is inherited for git credentials
+	cmd.Env = os.Environ()
+	
+	logger.Debug("Executing command for output", "command", name, "args", args, "dir", dir)
 	output, err := cmd.CombinedOutput()
 	return string(output), err
 }
