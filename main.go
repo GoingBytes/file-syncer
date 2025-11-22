@@ -295,8 +295,6 @@ func runCommand(dir string, name string, args ...string) error {
 	cmd.Stderr = os.Stderr
 	// Ensure environment is inherited for git credentials
 	cmd.Env = os.Environ()
-	
-	logger.Debug("Executing command", "command", name, "args", args, "dir", dir)
 	return cmd.Run()
 }
 
@@ -305,8 +303,6 @@ func runCommandOutput(dir string, name string, args ...string) (string, error) {
 	cmd.Dir = dir
 	// Ensure environment is inherited for git credentials
 	cmd.Env = os.Environ()
-	
-	logger.Debug("Executing command for output", "command", name, "args", args, "dir", dir)
 	output, err := cmd.CombinedOutput()
 	return string(output), err
 }
