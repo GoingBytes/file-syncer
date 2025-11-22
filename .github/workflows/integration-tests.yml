@@ -1,0 +1,30 @@
+name: Integration Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      go-version:
+        description: Go version to use
+        required: true
+        default: "1.22.x"
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ inputs.go-version }}
+
+      - name: Download modules
+        run: go mod download
+
+      - name: Run integration tests
+        run: go test -v -tags=integration ./...
