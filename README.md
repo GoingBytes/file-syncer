@@ -9,6 +9,7 @@ A Go application to synchronize files in a folder with a GitHub repository.
 - **Private Repository Support**: Works with private GitHub repositories using system git credentials
 - **Structured Logging**: JSON-formatted logs with automatic rotation
   - Maximum log file size: 10MB
+  - Maximum log age: 28 days
   - Maximum number of backup files: 3
   - Automatic compression of rotated logs
   - Logs to both stdout and `file-syncer.log`
@@ -20,7 +21,7 @@ A Go application to synchronize files in a folder with a GitHub repository.
 
 ### Prerequisites
 
-- Go 1.16 or later
+- Go 1.25.4 or later
 - Git
 
 ### Build from Source
@@ -147,6 +148,7 @@ The application uses structured JSON logging with automatic rotation:
 
 - **Log file**: `file-syncer.log` (created in the current directory)
 - **Max size**: 10MB per file
+- **Max age**: 28 days
 - **Retention**: 3 backup files
 - **Compression**: Old logs are automatically gzipped
 - **Output**: Logs are written to both stdout and the log file
