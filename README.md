@@ -1,5 +1,7 @@
 # file-syncer
 
+[![Tests](https://github.com/GoingBytes/file-syncer/actions/workflows/tests.yml/badge.svg)](https://github.com/GoingBytes/file-syncer/actions/workflows/tests.yml)
+
 A Go application to synchronize files in a folder with a GitHub repository.
 
 ## Features
