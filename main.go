@@ -23,6 +23,7 @@ type Config struct {
 	FolderPath string
 	RepoURL    string
 	Branch     string
+	SSHKeyPath string
 }
 
 var logger *slog.Logger
@@ -74,6 +75,7 @@ func parseFlags() Config {
 	flag.StringVar(&config.FolderPath, "folder", "", "Path to the folder to sync")
 	flag.StringVar(&config.RepoURL, "repo", "", "GitHub repository URL")
 	flag.StringVar(&config.Branch, "branch", "main", "Git branch to use (default: main)")
+	flag.StringVar(&config.SSHKeyPath, "ssh-key", "", "Path to SSH private key for git operations (optional)")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n\n", os.Args[0])
@@ -84,6 +86,8 @@ func parseFlags() Config {
 		fmt.Fprintf(os.Stderr, "    %s -mode push -folder ./myfiles -repo https://github.com/user/repo.git\n\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  Pull files from repository:\n")
 		fmt.Fprintf(os.Stderr, "    %s -mode pull -folder ./myfiles -repo https://github.com/user/repo.git\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  Use custom SSH key:\n")
+		fmt.Fprintf(os.Stderr, "    %s -mode push -folder ./myfiles -repo git@github.com:user/repo.git -ssh-key ~/.ssh/id_rsa\n\n", os.Args[0])
 	}
 
 	flag.Parse()
@@ -142,14 +146,14 @@ func pushFiles(config Config) error {
 
 	// Clone the repository
 	logger.Info("Cloning repository", "url", config.RepoURL, "branch", config.Branch)
-	if err := runCommand(tempDir, "git", "clone", "--branch", config.Branch, config.RepoURL, "."); err != nil {
+	if err := runCommand(tempDir, config.SSHKeyPath, "git", "clone", "--branch", config.Branch, config.RepoURL, "."); err != nil {
 		// Try cloning without branch if it doesn't exist
 		logger.Info("Branch not found, cloning default branch", "branch", config.Branch)
-		if err := runCommand(tempDir, "git", "clone", config.RepoURL, "."); err != nil {
+		if err := runCommand(tempDir, config.SSHKeyPath, "git", "clone", config.RepoURL, "."); err != nil {
 			return fmt.Errorf("failed to clone repository: %w", err)
 		}
 		// Create and checkout the branch
-		if err := runCommand(tempDir, "git", "checkout", "-b", config.Branch); err != nil {
+		if err := runCommand(tempDir, config.SSHKeyPath, "git", "checkout", "-b", config.Branch); err != nil {
 			return fmt.Errorf("failed to create branch: %w", err)
 		}
 	}
@@ -161,7 +165,7 @@ func pushFiles(config Config) error {
 	}
 
 	// Check if there are changes
-	output, err := runCommandOutput(tempDir, "git", "status", "--porcelain")
+	output, err := runCommandOutput(tempDir, config.SSHKeyPath, "git", "status", "--porcelain")
 	if err != nil {
 		return fmt.Errorf("failed to check git status: %w", err)
 	}
@@ -173,19 +177,19 @@ func pushFiles(config Config) error {
 
 	// Add all changes
 	logger.Info("Adding changes")
-	if err := runCommand(tempDir, "git", "add", "-A"); err != nil {
+	if err := runCommand(tempDir, config.SSHKeyPath, "git", "add", "-A"); err != nil {
 		return fmt.Errorf("failed to add changes: %w", err)
 	}
 
 	// Commit changes
 	logger.Info("Committing changes")
-	if err := runCommand(tempDir, "git", "commit", "-m", "Sync files from local folder"); err != nil {
+	if err := runCommand(tempDir, config.SSHKeyPath, "git", "commit", "-m", "Sync files from local folder"); err != nil {
 		return fmt.Errorf("failed to commit changes: %w", err)
 	}
 
 	// Push to remote
 	logger.Info("Pushing to remote", "branch", config.Branch)
-	if err := runCommand(tempDir, "git", "push", "origin", config.Branch); err != nil {
+	if err := runCommand(tempDir, config.SSHKeyPath, "git", "push", "origin", config.Branch); err != nil {
 		return fmt.Errorf("failed to push changes: %w", err)
 	}
 
@@ -216,7 +220,7 @@ func pullFiles(config Config) error {
 
 	// Clone the repository
 	logger.Info("Cloning repository", "url", config.RepoURL, "branch", config.Branch)
-	if err := runCommand(tempDir, "git", "clone", "--branch", config.Branch, config.RepoURL, "."); err != nil {
+	if err := runCommand(tempDir, config.SSHKeyPath, "git", "clone", "--branch", config.Branch, config.RepoURL, "."); err != nil {
 		return fmt.Errorf("failed to clone repository: %w", err)
 	}
 
@@ -288,21 +292,29 @@ func copyFile(src, dst string, mode os.FileMode) error {
 	return err
 }
 
-func runCommand(dir string, name string, args ...string) error {
+func runCommand(dir string, sshKeyPath string, name string, args ...string) error {
 	cmd := exec.Command(name, args...)
 	cmd.Dir = dir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	// Ensure environment is inherited for git credentials
 	cmd.Env = os.Environ()
+	// Set GIT_SSH_COMMAND if SSH key is provided
+	if sshKeyPath != "" {
+		cmd.Env = append(cmd.Env, fmt.Sprintf("GIT_SSH_COMMAND=ssh -i %s -o IdentitiesOnly=yes", sshKeyPath))
+	}
 	return cmd.Run()
 }
 
-func runCommandOutput(dir string, name string, args ...string) (string, error) {
+func runCommandOutput(dir string, sshKeyPath string, name string, args ...string) (string, error) {
 	cmd := exec.Command(name, args...)
 	cmd.Dir = dir
 	// Ensure environment is inherited for git credentials
 	cmd.Env = os.Environ()
+	// Set GIT_SSH_COMMAND if SSH key is provided
+	if sshKeyPath != "" {
+		cmd.Env = append(cmd.Env, fmt.Sprintf("GIT_SSH_COMMAND=ssh -i %s -o IdentitiesOnly=yes", sshKeyPath))
+	}
 	output, err := cmd.CombinedOutput()
 	return string(output), err
 }

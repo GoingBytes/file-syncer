@@ -206,3 +206,43 @@ func TestCopyFile(t *testing.T) {
 		t.Errorf("content mismatch: got %q, want %q", string(content), testContent)
 	}
 }
+
+func TestValidateConfigWithSSHKey(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  Config
+		wantErr bool
+	}{
+		{
+			name: "valid config with SSH key",
+			config: Config{
+				Mode:       ModePush,
+				FolderPath: "/tmp/test",
+				RepoURL:    "git@github.com:user/repo.git",
+				Branch:     "main",
+				SSHKeyPath: "/home/user/.ssh/id_rsa",
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid config without SSH key",
+			config: Config{
+				Mode:       ModePush,
+				FolderPath: "/tmp/test",
+				RepoURL:    "https://github.com/user/repo.git",
+				Branch:     "main",
+				SSHKeyPath: "",
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateConfig(tt.config)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateConfig() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
