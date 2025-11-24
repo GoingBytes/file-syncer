@@ -364,6 +364,10 @@ func parseGitStatus(statusOutput string) FileChangeStats {
 			stats.Deleted = append(stats.Deleted, filename)
 		case statusCode[0] == 'R':
 			// Renamed files - treat as modified
+			// Format is "old -> new", extract just the new filename
+			if idx := strings.Index(filename, " -> "); idx != -1 {
+				filename = filename[idx+4:]
+			}
 			stats.Modified = append(stats.Modified, filename)
 		}
 	}

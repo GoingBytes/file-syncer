@@ -392,6 +392,15 @@ func TestParseGitStatus(t *testing.T) {
 				Deleted:  []string{},
 			},
 		},
+		{
+			name:   "renamed file",
+			output: "R  old-name.txt -> new-name.txt",
+			want: FileChangeStats{
+				Added:    []string{},
+				Modified: []string{"new-name.txt"},
+				Deleted:  []string{},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -409,20 +418,32 @@ func TestParseGitStatus(t *testing.T) {
 			
 			// Check individual files
 			for i, file := range tt.want.Added {
-				if i >= len(got.Added) || got.Added[i] != file {
-					t.Errorf("parseGitStatus() added[%d] = %v, want %v", i, got.Added, tt.want.Added)
+				if i >= len(got.Added) {
+					t.Errorf("parseGitStatus() added[%d] missing, want %q", i, file)
+					break
+				}
+				if got.Added[i] != file {
+					t.Errorf("parseGitStatus() added[%d] = %q, want %q", i, got.Added[i], file)
 					break
 				}
 			}
 			for i, file := range tt.want.Modified {
-				if i >= len(got.Modified) || got.Modified[i] != file {
-					t.Errorf("parseGitStatus() modified[%d] = %v, want %v", i, got.Modified, tt.want.Modified)
+				if i >= len(got.Modified) {
+					t.Errorf("parseGitStatus() modified[%d] missing, want %q", i, file)
+					break
+				}
+				if got.Modified[i] != file {
+					t.Errorf("parseGitStatus() modified[%d] = %q, want %q", i, got.Modified[i], file)
 					break
 				}
 			}
 			for i, file := range tt.want.Deleted {
-				if i >= len(got.Deleted) || got.Deleted[i] != file {
-					t.Errorf("parseGitStatus() deleted[%d] = %v, want %v", i, got.Deleted, tt.want.Deleted)
+				if i >= len(got.Deleted) {
+					t.Errorf("parseGitStatus() deleted[%d] missing, want %q", i, file)
+					break
+				}
+				if got.Deleted[i] != file {
+					t.Errorf("parseGitStatus() deleted[%d] = %q, want %q", i, got.Deleted[i], file)
 					break
 				}
 			}
