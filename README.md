@@ -173,7 +173,3 @@ go test -v ./...
 - The `.git` directory is always excluded from synchronization
 - For push mode, if there are no changes, no commit or push will be performed
 - All operations are logged with structured JSON format for easy parsing and monitoring
-
-## License
-
-MIT
