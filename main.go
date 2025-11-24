@@ -207,9 +207,17 @@ func pushFiles(config Config) error {
 		return fmt.Errorf("failed to add changes: %w", err)
 	}
 
+	// Generate meaningful commit message based on changes
+	stats := parseGitStatus(output)
+	commitSubject, commitBody := generateCommitMessage(stats)
+	
 	// Commit changes
-	logger.Info("Committing changes")
-	if err := runCommand(tempDir, config.SSHKeyPath, "git", "commit", "-m", "Sync files from local folder"); err != nil {
+	logger.Info("Committing changes", "message", commitSubject)
+	commitMessage := commitSubject
+	if commitBody != "" {
+		commitMessage = commitSubject + "\n\n" + commitBody
+	}
+	if err := runCommand(tempDir, config.SSHKeyPath, "git", "commit", "-m", commitMessage); err != nil {
 		return fmt.Errorf("failed to commit changes: %w", err)
 	}
 
@@ -316,6 +324,107 @@ func copyFile(src, dst string, mode os.FileMode) error {
 	// Copy contents
 	_, err = io.Copy(dstFile, srcFile)
 	return err
+}
+
+// FileChangeStats holds statistics about file changes
+type FileChangeStats struct {
+	Added    []string
+	Modified []string
+	Deleted  []string
+}
+
+// parseGitStatus parses git status --porcelain output and returns file change statistics
+func parseGitStatus(statusOutput string) FileChangeStats {
+	stats := FileChangeStats{
+		Added:    []string{},
+		Modified: []string{},
+		Deleted:  []string{},
+	}
+
+	// Don't trim the output before splitting to preserve leading spaces in status codes
+	lines := strings.Split(statusOutput, "\n")
+	for _, line := range lines {
+		// Skip empty lines
+		if len(line) < 3 {
+			continue
+		}
+
+		// Git status --porcelain format: XY filename
+		// X = status in index, Y = status in working tree
+		// The filename starts at position 3 (after 2 status chars and 1 space)
+		statusCode := line[0:2]
+		filename := line[3:]
+
+		switch {
+		case statusCode == "A " || statusCode == "??":
+			stats.Added = append(stats.Added, filename)
+		case statusCode == "M " || statusCode == " M" || statusCode == "MM":
+			stats.Modified = append(stats.Modified, filename)
+		case statusCode == "D " || statusCode == " D":
+			stats.Deleted = append(stats.Deleted, filename)
+		case statusCode[0] == 'R':
+			// Renamed files - treat as modified
+			stats.Modified = append(stats.Modified, filename)
+		}
+	}
+
+	return stats
+}
+
+// generateCommitMessage creates a meaningful commit message based on file changes
+func generateCommitMessage(stats FileChangeStats) (string, string) {
+	totalChanges := len(stats.Added) + len(stats.Modified) + len(stats.Deleted)
+	
+	// Build commit subject
+	var subject strings.Builder
+	subject.WriteString("Sync ")
+	subject.WriteString(fmt.Sprintf("%d file", totalChanges))
+	if totalChanges != 1 {
+		subject.WriteString("s")
+	}
+	
+	parts := []string{}
+	if len(stats.Added) > 0 {
+		parts = append(parts, fmt.Sprintf("%d added", len(stats.Added)))
+	}
+	if len(stats.Modified) > 0 {
+		parts = append(parts, fmt.Sprintf("%d modified", len(stats.Modified)))
+	}
+	if len(stats.Deleted) > 0 {
+		parts = append(parts, fmt.Sprintf("%d deleted", len(stats.Deleted)))
+	}
+	
+	if len(parts) > 0 {
+		subject.WriteString(" (")
+		subject.WriteString(strings.Join(parts, ", "))
+		subject.WriteString(")")
+	}
+
+	// Build commit body with file details
+	var body strings.Builder
+	
+	if len(stats.Added) > 0 {
+		body.WriteString("\nAdded files:\n")
+		for _, file := range stats.Added {
+			body.WriteString(fmt.Sprintf("  + %s\n", file))
+		}
+	}
+	
+	if len(stats.Modified) > 0 {
+		body.WriteString("\nModified files:\n")
+		for _, file := range stats.Modified {
+			body.WriteString(fmt.Sprintf("  ~ %s\n", file))
+		}
+	}
+	
+	if len(stats.Deleted) > 0 {
+		body.WriteString("\nDeleted files:\n")
+		for _, file := range stats.Deleted {
+			body.WriteString(fmt.Sprintf("  - %s\n", file))
+		}
+	}
+
+	return subject.String(), strings.TrimSpace(body.String())
 }
 
 func runCommand(dir string, sshKeyPath string, name string, args ...string) error {
