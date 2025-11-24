@@ -246,3 +246,41 @@ func TestValidateConfigWithSSHKey(t *testing.T) {
 		})
 	}
 }
+
+func TestShellQuote(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "simple path",
+			input: "/home/user/.ssh/id_rsa",
+			want:  "'/home/user/.ssh/id_rsa'",
+		},
+		{
+			name:  "path with spaces",
+			input: "/home/user/my files/.ssh/id_rsa",
+			want:  "'/home/user/my files/.ssh/id_rsa'",
+		},
+		{
+			name:  "path with single quote",
+			input: "/home/user's/.ssh/id_rsa",
+			want:  "'/home/user'\"'\"'s/.ssh/id_rsa'",
+		},
+		{
+			name:  "path with special chars",
+			input: "/home/user/.ssh/key$file",
+			want:  "'/home/user/.ssh/key$file'",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := shellQuote(tt.input)
+			if got != tt.want {
+				t.Errorf("shellQuote() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

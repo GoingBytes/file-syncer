@@ -13,6 +13,12 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
+// shellQuote safely quotes a string for use in a shell command
+func shellQuote(s string) string {
+	// Use single quotes and escape any single quotes in the string
+	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
+}
+
 const (
 	ModePush = "push"
 	ModePull = "pull"
@@ -301,7 +307,7 @@ func runCommand(dir string, sshKeyPath string, name string, args ...string) erro
 	cmd.Env = os.Environ()
 	// Set GIT_SSH_COMMAND if SSH key is provided
 	if sshKeyPath != "" {
-		cmd.Env = append(cmd.Env, fmt.Sprintf("GIT_SSH_COMMAND=ssh -i %s -o IdentitiesOnly=yes", sshKeyPath))
+		cmd.Env = append(cmd.Env, fmt.Sprintf("GIT_SSH_COMMAND=ssh -i %s -o IdentitiesOnly=yes", shellQuote(sshKeyPath)))
 	}
 	return cmd.Run()
 }
@@ -313,7 +319,7 @@ func runCommandOutput(dir string, sshKeyPath string, name string, args ...string
 	cmd.Env = os.Environ()
 	// Set GIT_SSH_COMMAND if SSH key is provided
 	if sshKeyPath != "" {
-		cmd.Env = append(cmd.Env, fmt.Sprintf("GIT_SSH_COMMAND=ssh -i %s -o IdentitiesOnly=yes", sshKeyPath))
+		cmd.Env = append(cmd.Env, fmt.Sprintf("GIT_SSH_COMMAND=ssh -i %s -o IdentitiesOnly=yes", shellQuote(sshKeyPath)))
 	}
 	output, err := cmd.CombinedOutput()
 	return string(output), err
