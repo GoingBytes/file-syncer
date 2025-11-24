@@ -322,3 +322,203 @@ func TestBuildGitSSHCommand(t *testing.T) {
 		})
 	}
 }
+
+func TestParseGitStatus(t *testing.T) {
+	tests := []struct {
+		name   string
+		output string
+		want   FileChangeStats
+	}{
+		{
+			name:   "single added file",
+			output: "A  newfile.txt",
+			want: FileChangeStats{
+				Added:    []string{"newfile.txt"},
+				Modified: []string{},
+				Deleted:  []string{},
+			},
+		},
+		{
+			name:   "single modified file",
+			output: "M  modified.txt",
+			want: FileChangeStats{
+				Added:    []string{},
+				Modified: []string{"modified.txt"},
+				Deleted:  []string{},
+			},
+		},
+		{
+			name:   "single deleted file",
+			output: "D  deleted.txt",
+			want: FileChangeStats{
+				Added:    []string{},
+				Modified: []string{},
+				Deleted:  []string{"deleted.txt"},
+			},
+		},
+		{
+			name:   "mixed changes",
+			output: "A  added.txt\nM  modified.txt\nD  deleted.txt",
+			want: FileChangeStats{
+				Added:    []string{"added.txt"},
+				Modified: []string{"modified.txt"},
+				Deleted:  []string{"deleted.txt"},
+			},
+		},
+		{
+			name:   "untracked file",
+			output: "?? untracked.txt",
+			want: FileChangeStats{
+				Added:    []string{"untracked.txt"},
+				Modified: []string{},
+				Deleted:  []string{},
+			},
+		},
+		{
+			name:   "multiple files of same type",
+			output: "A  file1.txt\nA  file2.txt\nM  file3.txt",
+			want: FileChangeStats{
+				Added:    []string{"file1.txt", "file2.txt"},
+				Modified: []string{"file3.txt"},
+				Deleted:  []string{},
+			},
+		},
+		{
+			name:   "modified with space prefix",
+			output: " M modified.txt",
+			want: FileChangeStats{
+				Added:    []string{},
+				Modified: []string{"modified.txt"},
+				Deleted:  []string{},
+			},
+		},
+		{
+			name:   "renamed file",
+			output: "R  old-name.txt -> new-name.txt",
+			want: FileChangeStats{
+				Added:    []string{},
+				Modified: []string{"new-name.txt"},
+				Deleted:  []string{},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseGitStatus(tt.output)
+			if len(got.Added) != len(tt.want.Added) {
+				t.Errorf("parseGitStatus() added count = %v, want %v", len(got.Added), len(tt.want.Added))
+			}
+			if len(got.Modified) != len(tt.want.Modified) {
+				t.Errorf("parseGitStatus() modified count = %v, want %v", len(got.Modified), len(tt.want.Modified))
+			}
+			if len(got.Deleted) != len(tt.want.Deleted) {
+				t.Errorf("parseGitStatus() deleted count = %v, want %v", len(got.Deleted), len(tt.want.Deleted))
+			}
+			
+			// Check individual files
+			for i, file := range tt.want.Added {
+				if i >= len(got.Added) {
+					t.Errorf("parseGitStatus() added[%d] missing, want %q", i, file)
+					break
+				}
+				if got.Added[i] != file {
+					t.Errorf("parseGitStatus() added[%d] = %q, want %q", i, got.Added[i], file)
+					break
+				}
+			}
+			for i, file := range tt.want.Modified {
+				if i >= len(got.Modified) {
+					t.Errorf("parseGitStatus() modified[%d] missing, want %q", i, file)
+					break
+				}
+				if got.Modified[i] != file {
+					t.Errorf("parseGitStatus() modified[%d] = %q, want %q", i, got.Modified[i], file)
+					break
+				}
+			}
+			for i, file := range tt.want.Deleted {
+				if i >= len(got.Deleted) {
+					t.Errorf("parseGitStatus() deleted[%d] missing, want %q", i, file)
+					break
+				}
+				if got.Deleted[i] != file {
+					t.Errorf("parseGitStatus() deleted[%d] = %q, want %q", i, got.Deleted[i], file)
+					break
+				}
+			}
+		})
+	}
+}
+
+func TestGenerateCommitMessage(t *testing.T) {
+	tests := []struct {
+		name        string
+		stats       FileChangeStats
+		wantSubject string
+		wantBody    string
+	}{
+		{
+			name: "single added file",
+			stats: FileChangeStats{
+				Added:    []string{"file.txt"},
+				Modified: []string{},
+				Deleted:  []string{},
+			},
+			wantSubject: "Sync 1 file (1 added)",
+			wantBody:    "Added files:\n  + file.txt",
+		},
+		{
+			name: "single modified file",
+			stats: FileChangeStats{
+				Added:    []string{},
+				Modified: []string{"file.txt"},
+				Deleted:  []string{},
+			},
+			wantSubject: "Sync 1 file (1 modified)",
+			wantBody:    "Modified files:\n  ~ file.txt",
+		},
+		{
+			name: "single deleted file",
+			stats: FileChangeStats{
+				Added:    []string{},
+				Modified: []string{},
+				Deleted:  []string{"file.txt"},
+			},
+			wantSubject: "Sync 1 file (1 deleted)",
+			wantBody:    "Deleted files:\n  - file.txt",
+		},
+		{
+			name: "multiple files mixed",
+			stats: FileChangeStats{
+				Added:    []string{"new1.txt", "new2.txt"},
+				Modified: []string{"mod.txt"},
+				Deleted:  []string{"old.txt"},
+			},
+			wantSubject: "Sync 4 files (2 added, 1 modified, 1 deleted)",
+			wantBody:    "Added files:\n  + new1.txt\n  + new2.txt\n\nModified files:\n  ~ mod.txt\n\nDeleted files:\n  - old.txt",
+		},
+		{
+			name: "only modified files",
+			stats: FileChangeStats{
+				Added:    []string{},
+				Modified: []string{"file1.txt", "file2.txt"},
+				Deleted:  []string{},
+			},
+			wantSubject: "Sync 2 files (2 modified)",
+			wantBody:    "Modified files:\n  ~ file1.txt\n  ~ file2.txt",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotSubject, gotBody := generateCommitMessage(tt.stats)
+			if gotSubject != tt.wantSubject {
+				t.Errorf("generateCommitMessage() subject = %v, want %v", gotSubject, tt.wantSubject)
+			}
+			if gotBody != tt.wantBody {
+				t.Errorf("generateCommitMessage() body = %v, want %v", gotBody, tt.wantBody)
+			}
+		})
+	}
+}
