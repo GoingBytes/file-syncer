@@ -32,9 +32,11 @@ func escapeShellArg(s string) string {
 }
 
 // buildGitSSHCommand creates the GIT_SSH_COMMAND environment variable value
-// with the specified SSH key path, properly escaped for shell execution
+// with the specified SSH key path, properly escaped for shell execution.
+// It includes StrictHostKeyChecking=accept-new to automatically accept new host keys
+// without prompting, while still verifying known hosts for security.
 func buildGitSSHCommand(sshKeyPath string) string {
-	return fmt.Sprintf("ssh -i %s -o IdentitiesOnly=yes", escapeShellArg(sshKeyPath))
+	return fmt.Sprintf("ssh -i %s -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new", escapeShellArg(sshKeyPath))
 }
 
 const (
