@@ -299,17 +299,17 @@ func TestBuildGitSSHCommand(t *testing.T) {
 		{
 			name:       "simple path",
 			sshKeyPath: "/home/user/.ssh/id_rsa",
-			want:       "ssh -i /home/user/.ssh/id_rsa -o IdentitiesOnly=yes",
+			want:       "ssh -i /home/user/.ssh/id_rsa -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new",
 		},
 		{
 			name:       "path with spaces",
 			sshKeyPath: "/home/user/my files/.ssh/id_rsa",
-			want:       "ssh -i /home/user/my\\ files/.ssh/id_rsa -o IdentitiesOnly=yes",
+			want:       "ssh -i /home/user/my\\ files/.ssh/id_rsa -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new",
 		},
 		{
 			name:       "path with special chars",
 			sshKeyPath: "/home/user's key/.ssh/deploy (prod).pem",
-			want:       "ssh -i /home/user\\'s\\ key/.ssh/deploy\\ \\(prod\\).pem -o IdentitiesOnly=yes",
+			want:       "ssh -i /home/user\\'s\\ key/.ssh/deploy\\ \\(prod\\).pem -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new",
 		},
 	}
 
