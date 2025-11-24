@@ -206,3 +206,119 @@ func TestCopyFile(t *testing.T) {
 		t.Errorf("content mismatch: got %q, want %q", string(content), testContent)
 	}
 }
+
+func TestValidateConfigWithSSHKey(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  Config
+		wantErr bool
+	}{
+		{
+			name: "valid config with SSH key",
+			config: Config{
+				Mode:       ModePush,
+				FolderPath: "/tmp/test",
+				RepoURL:    "git@github.com:user/repo.git",
+				Branch:     "main",
+				SSHKeyPath: "/home/user/.ssh/id_rsa",
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid config without SSH key",
+			config: Config{
+				Mode:       ModePush,
+				FolderPath: "/tmp/test",
+				RepoURL:    "https://github.com/user/repo.git",
+				Branch:     "main",
+				SSHKeyPath: "",
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateConfig(tt.config)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateConfig() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestEscapeShellArg(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "simple path",
+			input: "/home/user/.ssh/id_rsa",
+			want:  "/home/user/.ssh/id_rsa",
+		},
+		{
+			name:  "path with spaces",
+			input: "/home/user/my files/.ssh/id_rsa",
+			want:  "/home/user/my\\ files/.ssh/id_rsa",
+		},
+		{
+			name:  "path with single quote",
+			input: "/home/user's/.ssh/id_rsa",
+			want:  "/home/user\\'s/.ssh/id_rsa",
+		},
+		{
+			name:  "path with special chars",
+			input: "/home/user/.ssh/key$file",
+			want:  "/home/user/.ssh/key\\$file",
+		},
+		{
+			name:  "path with multiple special chars",
+			input: "/home/user name/.ssh/key file (1).pem",
+			want:  "/home/user\\ name/.ssh/key\\ file\\ \\(1\\).pem",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := escapeShellArg(tt.input)
+			if got != tt.want {
+				t.Errorf("escapeShellArg() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBuildGitSSHCommand(t *testing.T) {
+	tests := []struct {
+		name       string
+		sshKeyPath string
+		want       string
+	}{
+		{
+			name:       "simple path",
+			sshKeyPath: "/home/user/.ssh/id_rsa",
+			want:       "ssh -i /home/user/.ssh/id_rsa -o IdentitiesOnly=yes",
+		},
+		{
+			name:       "path with spaces",
+			sshKeyPath: "/home/user/my files/.ssh/id_rsa",
+			want:       "ssh -i /home/user/my\\ files/.ssh/id_rsa -o IdentitiesOnly=yes",
+		},
+		{
+			name:       "path with special chars",
+			sshKeyPath: "/home/user's key/.ssh/deploy (prod).pem",
+			want:       "ssh -i /home/user\\'s\\ key/.ssh/deploy\\ \\(prod\\).pem -o IdentitiesOnly=yes",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := buildGitSSHCommand(tt.sshKeyPath)
+			if got != tt.want {
+				t.Errorf("buildGitSSHCommand() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

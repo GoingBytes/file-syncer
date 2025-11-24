@@ -45,6 +45,8 @@ go build -o file-syncer .
     GitHub repository URL (required)
 -branch string
     Git branch to use (default: "main")
+-ssh-key string
+    Path to SSH private key for git operations (optional)
 ```
 
 ### Push Mode
@@ -114,6 +116,16 @@ On machine 2:
 ./file-syncer -mode pull -folder ~/projects/shared -repo https://github.com/yourusername/shared-files.git
 ```
 
+### Example 3: Using a custom SSH key
+
+```bash
+# Push with a specific SSH key (useful for deployment keys or multiple accounts)
+./file-syncer -mode push -folder ~/backups -repo git@github.com:yourusername/backup-repo.git -ssh-key ~/.ssh/deployment_key
+
+# Pull with a specific SSH key
+./file-syncer -mode pull -folder ~/restore -repo git@github.com:yourusername/backup-repo.git -ssh-key ~/.ssh/deployment_key
+```
+
 ## Private Repository Authentication
 
 The application supports both public and private GitHub repositories. For private repositories, ensure your system is configured with appropriate git credentials:
@@ -121,8 +133,11 @@ The application supports both public and private GitHub repositories. For privat
 ### SSH Keys (Recommended)
 
 ```bash
-# Use SSH URL format
+# Use SSH URL format with system default SSH key
 ./file-syncer -mode push -folder ./myfiles -repo git@github.com:yourusername/private-repo.git
+
+# Or specify a custom SSH key
+./file-syncer -mode push -folder ./myfiles -repo git@github.com:yourusername/private-repo.git -ssh-key ~/.ssh/custom_id_rsa
 ```
 
 ### HTTPS with Credential Helper
