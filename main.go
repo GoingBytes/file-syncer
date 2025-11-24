@@ -13,8 +13,11 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
-// escapeShellArg escapes a string for safe use as a shell argument
-// It uses backslash escaping for special characters
+// escapeShellArg escapes a string for safe use as a shell argument in GIT_SSH_COMMAND.
+// It uses backslash escaping for special shell characters to prevent command injection
+// while maintaining compatibility with how shells process environment variables.
+//
+// Example: "/path/with spaces/key.pem" -> "/path/with\\ spaces/key.pem"
 func escapeShellArg(s string) string {
 	// Characters that need escaping in shell
 	needsEscape := " \t\n\r\"'`$\\|&;<>(){}[]!*?"
@@ -26,6 +29,12 @@ func escapeShellArg(s string) string {
 		result.WriteRune(c)
 	}
 	return result.String()
+}
+
+// buildGitSSHCommand creates the GIT_SSH_COMMAND environment variable value
+// with the specified SSH key path, properly escaped for shell execution
+func buildGitSSHCommand(sshKeyPath string) string {
+	return fmt.Sprintf("ssh -i %s -o IdentitiesOnly=yes", escapeShellArg(sshKeyPath))
 }
 
 const (
@@ -316,7 +325,7 @@ func runCommand(dir string, sshKeyPath string, name string, args ...string) erro
 	cmd.Env = os.Environ()
 	// Set GIT_SSH_COMMAND if SSH key is provided
 	if sshKeyPath != "" {
-		cmd.Env = append(cmd.Env, fmt.Sprintf("GIT_SSH_COMMAND=ssh -i %s -o IdentitiesOnly=yes", escapeShellArg(sshKeyPath)))
+		cmd.Env = append(cmd.Env, "GIT_SSH_COMMAND="+buildGitSSHCommand(sshKeyPath))
 	}
 	return cmd.Run()
 }
@@ -328,7 +337,7 @@ func runCommandOutput(dir string, sshKeyPath string, name string, args ...string
 	cmd.Env = os.Environ()
 	// Set GIT_SSH_COMMAND if SSH key is provided
 	if sshKeyPath != "" {
-		cmd.Env = append(cmd.Env, fmt.Sprintf("GIT_SSH_COMMAND=ssh -i %s -o IdentitiesOnly=yes", escapeShellArg(sshKeyPath)))
+		cmd.Env = append(cmd.Env, "GIT_SSH_COMMAND="+buildGitSSHCommand(sshKeyPath))
 	}
 	output, err := cmd.CombinedOutput()
 	return string(output), err
