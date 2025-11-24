@@ -402,26 +402,39 @@ func generateCommitMessage(stats FileChangeStats) (string, string) {
 
 	// Build commit body with file details
 	var body strings.Builder
+	firstSection := true
 	
 	if len(stats.Added) > 0 {
-		body.WriteString("\nAdded files:\n")
+		if !firstSection {
+			body.WriteString("\n")
+		}
+		body.WriteString("Added files:\n")
 		for _, file := range stats.Added {
 			body.WriteString(fmt.Sprintf("  + %s\n", file))
 		}
+		firstSection = false
 	}
 	
 	if len(stats.Modified) > 0 {
-		body.WriteString("\nModified files:\n")
+		if !firstSection {
+			body.WriteString("\n")
+		}
+		body.WriteString("Modified files:\n")
 		for _, file := range stats.Modified {
 			body.WriteString(fmt.Sprintf("  ~ %s\n", file))
 		}
+		firstSection = false
 	}
 	
 	if len(stats.Deleted) > 0 {
-		body.WriteString("\nDeleted files:\n")
+		if !firstSection {
+			body.WriteString("\n")
+		}
+		body.WriteString("Deleted files:\n")
 		for _, file := range stats.Deleted {
 			body.WriteString(fmt.Sprintf("  - %s\n", file))
 		}
+		firstSection = false
 	}
 
 	return subject.String(), strings.TrimSpace(body.String())
