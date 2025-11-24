@@ -23,11 +23,17 @@ jobs:
       - name: Run tests
         run: go test ./...
 
-      - name: Build binary
-        run: GOOS=linux GOARCH=amd64 go build -o file-syncer .
+      - name: Build binary for linux/amd64
+        run: GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o file-syncer .
 
-      - name: Prepare release asset
+      - name: Prepare linux/amd64 release asset
         run: mv file-syncer "file-syncer-${{ github.ref_name }}-linux-amd64"
+
+      - name: Build binary for linux/arm64
+        run: GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o file-syncer .
+
+      - name: Prepare linux/arm64 release asset
+        run: mv file-syncer "file-syncer-${{ github.ref_name }}-linux-arm64"
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
@@ -38,3 +44,4 @@ jobs:
           fail_on_unmatched_files: true
           files: |
             file-syncer-${{ github.ref_name }}-linux-amd64
+            file-syncer-${{ github.ref_name }}-linux-arm64
